@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SpamShield – Spam Message Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e9eef3;--card:#fbfcfd;--ink:#14213d;--mute:#5a6678;--line:#c9d3de;--spam:#c0392b;--ham:#1f7a4d;--warn:#b7791f;--accent:#14213d;--onaccent:#fbfcfd;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0f1722;--card:#18222f;--ink:#e6edf5;--mute:#93a1b3;--line:#2c3a4b;--spam:#ff7b6b;--ham:#5fd19a;--warn:#e8b45a;--accent:#e6edf5;--onaccent:#0f1722}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0f1722;--card:#18222f;--ink:#e6edf5;--mute:#93a1b3;--line:#2c3a4b;--spam:#ff7b6b;--ham:#5fd19a;--warn:#e8b45a;--accent:#e6edf5;--onaccent:#0f1722}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Bricolage Grotesque",system-ui,sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:0 18px 48px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:18px 0 10px}
+.brand{font-weight:800;font-size:1.5rem;letter-spacing:-.02em}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav a{color:var(--mute);text-decoration:none;padding:7px 13px;border-radius:8px;font-weight:600}
+nav a.on{background:var(--accent);color:var(--onaccent)}
+nav a:focus-visible,button:focus-visible,textarea:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+h1{font-size:clamp(1.8rem,5vw,2.6rem);line-height:1.1;margin:18px 0 6px;letter-spacing:-.03em;font-weight:800}
+h2{font-size:1.15rem;margin:0 0 10px}
+p.lead{color:var(--mute);margin:0 0 20px;max-width:60ch}
+.grid{display:grid;gap:14px}.g4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.g2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.num{font-size:2.2rem;font-weight:800;line-height:1}.lab{color:var(--mute);font-size:.9rem;margin-top:4px}
+.ser{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--mute);letter-spacing:.04em}
+textarea,input,select{width:100%;font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:11px}
+textarea{min-height:150px;resize:vertical}
+button{font:inherit;font-weight:600;cursor:pointer;border:0;border-radius:8px;padding:10px 18px;background:var(--accent);color:var(--onaccent)}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.del{background:transparent;color:var(--spam);padding:4px 8px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.stamp{display:inline-block;border:4px solid currentColor;border-radius:8px;padding:2px 16px;font-size:2rem;font-weight:800;letter-spacing:.06em;transform:rotate(-6deg);opacity:.92;animation:thud .25s ease-out}
+@keyframes thud{from{transform:rotate(-6deg) scale(1.6);opacity:0}}
+@media (prefers-reduced-motion:reduce){.stamp{animation:none}}
+.spam{color:var(--spam)}.ham{color:var(--ham)}.med{color:var(--warn)}
+.bar{height:10px;border-radius:6px;background:var(--line);overflow:hidden;margin:8px 0}.bar i{display:block;height:100%}
+ul.plain{margin:6px 0 0;padding-left:20px}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:600;font-size:.9rem}
+.scroll{overflow-x:auto}
+.empty{color:var(--mute);padding:18px 0}
+.msg{max-width:46ch;word-break:break-word}
+footer{color:var(--mute);font-size:.85rem;margin-top:30px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><div class="brand">🛡️ SpamShield</div>
+<nav id="nav"><a href="#dashboard" data-v="dashboard">Dashboard</a><a href="#detect" data-v="detect">Detect</a><a href="#history" data-v="history">History</a><a href="#analytics" data-v="analytics">Analytics</a><a href="#about" data-v="about">About</a></nav></header>
+<main id="app"></main>
+<footer>Runs entirely in your browser. Messages never leave your device.</footer>
+</div>
+<script>
+const MAXLEN=2000;
+const RULES=[
+[/\b(free|win|winner|won|prize|congratulations?|claim|cash|reward|bonus|gift)\b/gi,1.4,"Prize or “free” language"],
+[/\b(urgent|immediately|act now|limited time|expires?|last chance|hurry|today only)\b/gi,1.2,"Urgency pressure"],
+[/\b(click|verify|confirm|login|log in|suspended|password|otp|kyc|blocked)\b/gi,0.9,"Account or action bait"],
+[/https?:\/\/|www\.|\bbit\.ly|\b\w+\.(xyz|top|click|info|win)\b/gi,1.3,"Contains a link"],
+[/[$₹£€]\s?\d|\b\d+\s?(rs|inr|usd|dollars)\b|\blakhs?\b/gi,1.2,"Money amounts"],
+[/\b(loan|credit|lottery|offer|discount|deal|buy now|subscribe|unsubscribe|call now|stop to)\b/gi,1,"Promotional wording"],
+[/\b\d{10,}\b/g,0.8,"Long phone-like number"]];
+const HAM=/\b(thanks|thank you|see you|lunch|meeting|tomorrow|home|dinner|okay|ok|love|mom|dad|class|homework|bye|sorry|later)\b/gi;
+function analyze(t){
+ let s=-2.2;const why=[];
+ for(const [re,w,label] of RULES){const m=(t.match(re)||[]).length;if(m){s+=Math.min(m,2)*w;why.push(label+(m>1?" (×"+m+")":""));}}
+ const letters=t.replace(/[^a-z]/gi,"");const caps=letters.replace(/[^A-Z]/g,"").length;
+ if(letters.length>15&&caps/letters.length>.4){s+=1.2;why.push("Excessive capital letters");}
+ if((t.match(/!/g)||[]).length>=2){s+=.8;why.push("Repeated exclamation marks");}
+ const h=(t.match(HAM)||[]).length;if(h){s-=Math.min(h,3)*.9;}
+ const p=1/(1+Math.exp(-s));
+ const isSpam=p>=.5;const conf=isSpam?p:1-p;
+ const risk=isSpam?(p>=.85?"High":"Medium"):"Low";
+ if(!why.length)why.push("No spam signals found");
+ return {label:isSpam?"spam":"ham",spamProb:p,confidence:conf*100,risk,reasons:why};
+}
+let hist=[];
+try{hist=JSON.parse(localStorage.getItem("ss_hist")||"[]")}catch(e){hist=[]}
+function save(){try{localStorage.setItem("ss_hist",JSON.stringify(hist))}catch(e){}}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const serial=n=>String(n).padStart(6,"0");
+const pct=v=>(Math.floor(v*10)/10).toFixed(1);
+const fmt=ts=>{const d=new Date(ts);return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})+" · "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})};
+function add(msg){const r=analyze(msg);const last=hist.length?hist[0].id:0;const rec={id:last+1,msg,ts:Date.now(),...r};hist.unshift(rec);hist=hist.slice(0,300);save();return rec;}
+function stats(){const spam=hist.filter(h=>h.label==="spam").length;return{total:hist.length,spam,ham:hist.length-spam,rate:hist.length?spam/hist.length*100:0}}
+function daily(n){const out=[];for(let i=n-1;i>=0;i--){const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-i);const e=d.getTime()+864e5;const rows=hist.filter(h=>h.ts>=d.getTime()&&h.ts<e);out.push({d:d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"}),spam:rows.filter(r=>r.label==="spam").length,ham:rows.filter(r=>r.label==="ham").length})}return out}
+function donut(s){const t=s.total||1,r=48,c=2*Math.PI*r,sp=s.spam/t*c;
+ return `<svg viewBox="0 0 120 120" width="150" role="img" aria-label="Spam ${s.spam}, safe ${s.ham}"><circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--ham)" stroke-width="16" opacity="${s.total?1:.25}"/><circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--spam)" stroke-width="16" stroke-dasharray="${sp} ${c}" transform="rotate(-90 60 60)"/></svg>`}
+function bars(d){const mx=Math.max(1,...d.map(x=>x.spam+x.ham));const w=100/d.length;
+ return `<svg viewBox="0 0 100 52" width="100%" role="img" aria-label="Daily analyses">${d.map((x,i)=>{const hs=x.spam/mx*36,hh=x.ham/mx*36;return `<rect x="${i*w+w*.15}" y="${40-hh-hs}" width="${w*.7}" height="${hs}" fill="var(--spam)"/><rect x="${i*w+w*.15}" y="${40-hh}" width="${w*.7}" height="${hh}" fill="var(--ham)"/><text x="${i*w+w/2}" y="48" font-size="2.6" text-anchor="middle" fill="var(--mute)">${x.d.slice(0,2)}</text>`}).join("")}</svg>`}
+function legend(){return `<div class="lab"><b class="spam">■</b> Spam &nbsp; <b class="ham">■</b> Safe</div>`}
+function rowsHtml(rows,withDel){return rows.map(r=>`<tr><td class="ser">${serial(r.id)}</td><td class="msg">${esc(r.msg.length>110?r.msg.slice(0,110)+"…":r.msg)}</td><td><b class="${r.label}">${r.label==="spam"?"Spam":"Safe"}</b></td><td>${pct(r.confidence)}%</td><td>${fmt(r.ts)}</td>${withDel?`<td><button class="del" data-del="${r.id}" aria-label="Delete record ${serial(r.id)}">Delete</button></td>`:""}</tr>`).join("")}
+const head=(h,p)=>`<h1>${h}</h1><p class="lead">${p}</p>`;
+const V={
+dashboard(){const s=stats();return head("Know what’s spam before you tap.","Paste any SMS or email and SpamShield scores it in a moment.")+
+`<div class="grid g4"><div class="card"><div class="num">${s.total}</div><div class="lab">Messages checked</div></div><div class="card"><div class="num spam">${s.spam}</div><div class="lab">Spam caught</div></div><div class="card"><div class="num ham">${s.ham}</div><div class="lab">Safe messages</div></div><div class="card"><div class="num">${pct(s.rate)}%</div><div class="lab">Spam rate</div></div></div>
+<div class="grid g2" style="margin-top:14px"><div class="card"><h2>Spam vs safe</h2>${donut(s)}${legend()}</div><div class="card"><h2>Last 7 days</h2>${bars(daily(7))}${legend()}</div></div>
+<div class="card" style="margin-top:14px"><h2>Recent checks</h2>${hist.length?`<div class="scroll"><table><tr><th>No.</th><th>Message</th><th>Verdict</th><th>Confidence</th><th>Checked</th></tr>${rowsHtml(hist.slice(0,6),false)}</table></div>`:`<div class="empty">Nothing checked yet. <a href="#detect">Check your first message</a>.</div>`}</div>`},
+detect(){return head("Check a message","Paste the text below. Up to "+MAXLEN+" characters.")+
+`<div class="card"><label for="m" class="lab">Message text</label><textarea id="m" maxlength="${MAXLEN}" placeholder="e.g. Congratulations! You won ₹50,000. Click http://bit.ly/claim now"></textarea>
+<div class="row"><button id="go">Analyze message</button><button class="ghost" id="s1">Try a spam sample</button><button class="ghost" id="s2">Try a safe sample</button><span class="lab" id="cnt">0 / ${MAXLEN}</span></div><div id="err" class="spam" role="alert"></div></div><div id="res"></div>`},
+history(){return head("History","Every message you have checked on this device.")+
+`<div class="card"><div class="row" style="margin:0 0 10px"><input id="q" placeholder="Search messages" style="max-width:260px" value="${esc(hq)}"><select id="f" style="max-width:150px"><option value="all">All</option><option value="spam">Spam</option><option value="ham">Safe</option></select><button class="ghost" id="clr">Clear all</button></div><div id="hl"></div></div>`},
+analytics(){const s=stats();const bins=[0,0,0,0,0];hist.forEach(h=>{bins[Math.min(4,Math.floor(h.confidence/20))]++});const r={High:0,Medium:0,Low:0};hist.forEach(h=>r[h.risk]++);const mx=Math.max(1,...bins,...Object.values(r));
+ const hb=(l,v,c)=>`<div class="lab">${l} · ${v}</div><div class="bar"><i style="width:${v/mx*100}%;background:${c}"></i></div>`;
+ return head("Analytics","How your checks break down.")+
+ `<div class="grid g2"><div class="card"><h2>Last 14 days</h2>${bars(daily(14))}${legend()}</div><div class="card"><h2>Spam vs safe</h2>${donut(s)}${legend()}</div>
+ <div class="card"><h2>Confidence</h2>${["0–20%","20–40%","40–60%","60–80%","80–100%"].map((l,i)=>hb(l,bins[i],"var(--accent)")).join("")}</div>
+ <div class="card"><h2>Risk level</h2>${hb("High",r.High,"var(--spam)")}${hb("Medium",r.Medium,"var(--warn)")}${hb("Low",r.Low,"var(--ham)")}</div></div>`},
+about(){return head("About SpamShield","A spam message detector with a dashboard, history and analytics.")+
+`<div class="card"><h2>How it decides</h2><p>Each message is scored on signals such as prize wording, urgency, links, money amounts, account-verification bait, capital letters and punctuation. Friendly everyday wording lowers the score. The signals combine into a probability, shown as spam or safe with the reasons.</p><h2>Good to know</h2><ul class="plain"><li>This online version is a lightweight rule-based demo that runs in your browser.</li><li>History is stored only in this browser. Clearing site data removes it.</li><li>It is a guide, not a guarantee. Never share OTPs or passwords, whatever the verdict.</li></ul></div>`}};
+let hq="",hf="all",view="";
+function resultHtml(r){return `<div class="card" style="margin-top:14px"><div class="row" style="margin:0 0 6px"><span class="stamp ${r.label==="spam"?"spam":"ham"}">${r.label==="spam"?"SPAM":"SAFE"}</span><div><div class="ser">No. ${serial(r.id)}</div><div><b>${pct(r.confidence)}%</b> confidence · <b class="${r.risk==="High"?"spam":r.risk==="Medium"?"med":"ham"}">${r.risk} risk</b></div></div></div><div class="bar"><i style="width:${r.spamProb*100}%;background:var(--spam)"></i></div><div class="lab">Spam probability ${pct(r.spamProb*100)}%</div><h2 style="margin-top:12px">Why</h2><ul class="plain">${r.reasons.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`}
+function bindDetect(){const m=document.getElementById("m");m.oninput=()=>document.getElementById("cnt").textContent=m.value.length+" / "+MAXLEN;
+ const run=()=>{const t=m.value.trim(),e=document.getElementById("err");e.textContent="";
+  if(!t){e.textContent="Please enter a message to analyze.";return}
+  if(!/[a-z0-9]/i.test(t)){e.textContent="The message must contain some letters or numbers.";return}
+  document.getElementById("res").innerHTML=resultHtml(add(t))};
+ document.getElementById("go").onclick=run;
+ document.getElementById("s1").onclick=()=>{m.value="URGENT! Congratulations, you WON a free ₹50,000 cash prize! Click http://bit.ly/claim-now to verify your account today!!";m.oninput();run()};
+ document.getElementById("s2").onclick=()=>{m.value="Hey, are we still meeting for lunch tomorrow? Let me know, thanks!";m.oninput();run()}}
+function drawHist(){let rows=hist.filter(h=>(hf==="all"||h.label===hf)&&(!hq||h.msg.toLowerCase().includes(hq.toLowerCase())));
+ document.getElementById("hl").innerHTML=rows.length?`<div class="scroll"><table><tr><th>No.</th><th>Message</th><th>Verdict</th><th>Confidence</th><th>Checked</th><th></th></tr>${rowsHtml(rows,true)}</table></div>`:`<div class="empty">No records found.</div>`;
+ document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{hist=hist.filter(h=>h.id!=b.dataset.del);save();drawHist()})}
+function bindHist(){const q=document.getElementById("q"),f=document.getElementById("f");f.value=hf;
+ q.oninput=()=>{hq=q.value.trim();drawHist()};f.onchange=()=>{hf=f.value;drawHist()};
+ document.getElementById("clr").onclick=()=>{if(hist.length&&confirm("Delete all "+hist.length+" records?")){hist=[];save();drawHist()}};drawHist()}
+function route(){view=(location.hash||"#dashboard").slice(1);if(!V[view])view="dashboard";
+ document.getElementById("app").innerHTML=V[view]();
+ document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("on",a.dataset.v===view));
+ if(view==="detect")bindDetect();if(view==="history")bindHist();window.scrollTo(0,0)}
+window.addEventListener("hashchange",route);route();
+</script>
+</body>
+</html>
